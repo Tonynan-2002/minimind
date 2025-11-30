@@ -2,3 +2,9 @@ model/__pycache__
 out
 website/
 docs-minimind/
+
+# ignore dataset当中的所有文件，仅保留./datset当中的images，dataset.md lm_dataset.py
+dataset/*
+!dataset/images
+!dataset/dataset.md
+!dataset/lm_dataset.py
