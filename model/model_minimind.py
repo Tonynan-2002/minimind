@@ -24,7 +24,8 @@ class MiniMindConfig(PretrainedConfig):
             rms_norm_eps: float = 1e-05,
             rope_theta: int = 1000000.0,
             inference_rope_scaling: bool = False,
-            flash_attn: bool = True,
+            flash_attn: bool = False,
+            sage_attention: bool = True,
             ####################################################
             # Here are the specific configurations of MOE
             # When use_moe is false, the following is invalid
@@ -63,6 +64,8 @@ class MiniMindConfig(PretrainedConfig):
             "type": "yarn"
         } if self.inference_rope_scaling else None
         self.flash_attn = flash_attn
+        self.sage_attention = sage_attention
+        assert not (flash_attn and sage_attention), "flash_attn and sage_attention can only choose one at the same time"
         ####################################################
         # Here are the specific configurations of MOE
         # When use_moe is false, the following is invalid
@@ -90,6 +93,7 @@ from transformers.activations import ACT2FN
 from typing import Optional, Tuple, List, Union
 from transformers import PreTrainedModel, GenerationMixin, PretrainedConfig
 from transformers.modeling_outputs import CausalLMOutputWithPast
+from sageattn3 import sageattn3_blackwell as sageattn
 
 
 class RMSNorm(torch.nn.Module):
@@ -164,6 +168,8 @@ class Attention(nn.Module):
         self.resid_dropout = nn.Dropout(args.dropout)
         self.dropout = args.dropout
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention') and args.flash_attn
+        self.sage_attention = args.sage_attention
+        assert not (self.flash and self.sage_attention), "flash_attn and sage_attention can only choose one at the same time"
         # print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
 
     def forward(self,
@@ -195,6 +201,8 @@ class Attention(nn.Module):
 
         if self.flash and seq_len > 1 and (attention_mask is None or torch.all(attention_mask == 1)):
             output = F.scaled_dot_product_attention(xq, xk, xv, dropout_p=self.dropout if self.training else 0.0, is_causal=True)
+        elif self.sage_attention:
+            output = sageattn(xq, xk, xv, self.head_dim, self.dropout if self.training else 0.0, is_causal=True)
         else:
             scores = (xq @ xk.transpose(-2, -1)) / math.sqrt(self.head_dim)
             scores = scores + torch.triu(
