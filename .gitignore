@@ -8,3 +8,12 @@ dataset/*
 !dataset/images
 !dataset/dataset.md
 !dataset/lm_dataset.py
+
+# 忽略所有的__pycache__文件夹
+**/__pycache__/
+
+# 忽略checkpoints文件夹
+/checkpoints
+
+# 忽略所有.pth文件
+**/*.pth

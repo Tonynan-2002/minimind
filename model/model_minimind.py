@@ -202,7 +202,12 @@ class Attention(nn.Module):
         if self.flash and seq_len > 1 and (attention_mask is None or torch.all(attention_mask == 1)):
             output = F.scaled_dot_product_attention(xq, xk, xv, dropout_p=self.dropout if self.training else 0.0, is_causal=True)
         elif self.sage_attention:
-            output = sageattn(xq, xk, xv, self.head_dim, self.dropout if self.training else 0.0, is_causal=True)
+            # sageattn needs fp16 or bf16
+            if xq.dtype == torch.float32:
+                xq = xq.to(torch.bfloat16)
+                xk = xk.to(torch.bfloat16)
+                xv = xv.to(torch.bfloat16)
+            output = sageattn(xq, xk, xv, is_causal=True)
         else:
             scores = (xq @ xk.transpose(-2, -1)) / math.sqrt(self.head_dim)
             scores = scores + torch.triu(
